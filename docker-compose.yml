@@ -1,11 +1,9 @@
-version: '3.8'
-
 # 这是一个模板文件。如果手动部署，请将 <NODE_ID> 和 <IP> 替换为实际值。
 # 推荐使用 install.sh 脚本进行自动化部署。
 
 services:
   etcd:
-    image: bitnami/etcd:3.5
+    image: bitnami/etcd:latest
     container_name: etcd
     restart: always
     network_mode: "host"
