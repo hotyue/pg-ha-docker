@@ -3,12 +3,13 @@ namespace: /db/
 name: node<NODE_ID>
 
 restapi:
-  # 💡 核心升级：使用 * 替代 0.0.0.0，实现双栈监听，注意这里必须加引号
-  listen: '*:8008'
+  # 💡 核心修复：改回 0.0.0.0，彻底解决 Python http.server 双重绑定导致的 [Errno 98] 报错
+  listen: 0.0.0.0:8008
   connect_address: <CURRENT_IP>:8008
 
 etcd3:
   hosts: <NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
+  protocol: http
 
 bootstrap:
   dcs:
@@ -32,8 +33,8 @@ bootstrap:
     - data-checksums
 
 postgresql:
-  # 💡 核心升级：使用 * 替代 0.0.0.0，实现 PostgreSQL 服务的双栈监听
-  listen: '*:5432'
+  # 💡 核心修复：与 API 保持一致，使用 0.0.0.0 确保 Patroni 启动守护进程时不抛出异常
+  listen: 0.0.0.0:5432
   connect_address: <CURRENT_IP>:5432
   data_dir: /var/lib/postgresql/data/patroni
   bin_dir: /usr/lib/postgresql/16/bin
@@ -46,7 +47,7 @@ postgresql:
       username: postgres
       password: pgpassword
   pg_hba:
-    # 💡 核心升级：为 IPv4 和 IPv6 分别配置复制与业务的白名单权限
+    # 💡 保留：底层依然同时为 IPv4 和 IPv6 开放复制与业务的白名单权限
     - host replication replicator 0.0.0.0/0 md5
     - host replication replicator ::/0 md5
     - host all all 0.0.0.0/0 md5
