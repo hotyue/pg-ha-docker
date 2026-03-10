@@ -104,6 +104,10 @@ download_and_render "patroni/entrypoint.sh"
 download_and_render "patroni/patroni.yml"
 download_and_render "haproxy/haproxy.cfg"
 
+# 💡 核心修复：专治 HAProxy 的换行符强迫症！强制在末尾追加一个空行，防止因 Git 或编辑器吃掉空行导致的启动死循环
+echo "" >> ${BASE_DIR}/haproxy/haproxy.cfg
+log_info "已自动补齐 HAProxy 配置文件换行符"
+
 # 确保启动脚本具备可执行权限
 chmod +x ${BASE_DIR}/patroni/entrypoint.sh
 
