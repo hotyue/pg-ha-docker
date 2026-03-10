@@ -1,0 +1,48 @@
+scope: pg-ha-cluster
+namespace: /db/
+name: node<NODE_ID>
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: <CURRENT_IP>:8008
+
+etcd:
+  hosts: <NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
+
+bootstrap:
+  dcs:
+    # 针对 200ms 高延迟的集群超时时间调优
+    ttl: 60
+    loop_wait: 10
+    retry_timeout: 20
+    maximum_lag_on_failover: 33554432
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        max_connections: 100
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_keep_size: 1024MB
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: <CURRENT_IP>:5432
+  data_dir: /var/lib/postgresql/data/patroni
+  bin_dir: /usr/lib/postgresql/16/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    replication:
+      username: replicator
+      password: replpassword
+    superuser:
+      username: postgres
+      password: pgpassword
+  pg_hba:
+    - host replication replicator 0.0.0.0/0 md5
+    - host all all 0.0.0.0/0 md5

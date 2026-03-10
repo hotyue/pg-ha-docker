@@ -1,0 +1,55 @@
+version: '3.8'
+
+# 这是一个模板文件。如果手动部署，请将 <NODE_ID> 和 <IP> 替换为实际值。
+# 推荐使用 install.sh 脚本进行自动化部署。
+
+services:
+  etcd:
+    image: bitnami/etcd:3.5
+    container_name: etcd
+    restart: always
+    network_mode: "host"
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd<NODE_ID>
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://<CURRENT_IP>:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://<CURRENT_IP>:2379
+      - ETCD_INITIAL_CLUSTER_TOKEN=pg-ha-cluster
+      - ETCD_INITIAL_CLUSTER=etcd1=http://<NODE1_IP>:2380,etcd2=http://<NODE2_IP>:2380,etcd3=http://<NODE3_IP>:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      # 针对 200ms 高延迟的优化参数
+      - ETCD_HEARTBEAT_INTERVAL=1000
+      - ETCD_ELECTION_TIMEOUT=5000
+    volumes:
+      - ./etcd-data:/bitnami/etcd/data
+
+  patroni:
+    build: 
+      context: ./patroni
+    container_name: patroni
+    restart: always
+    network_mode: "host"
+    privileged: true
+    environment:
+      - PATRONI_NAME=node<NODE_ID>
+      - PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
+      - PATRONI_RESTAPI_CONNECT_ADDRESS=<CURRENT_IP>:8008
+      - PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
+      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=<CURRENT_IP>:5432
+      - ETCD_HOSTS=<NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+    depends_on:
+      - etcd
+
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: haproxy
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - patroni
