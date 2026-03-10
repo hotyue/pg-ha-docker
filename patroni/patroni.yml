@@ -7,7 +7,7 @@ restapi:
   listen: '*:8008'
   connect_address: <CURRENT_IP>:8008
 
-etcd:
+etcd3:
   hosts: <NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
 
 bootstrap:
