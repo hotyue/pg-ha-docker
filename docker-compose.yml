@@ -1,20 +1,21 @@
-# 这是一个模板文件。如果手动部署，请将 <NODE_ID> 和 <IP> 替换为实际值。
+# 这是一个支持 IPv4/IPv6 双栈的模板文件。
+# 如果手动部署，请将 <NODE_ID> 和带有中括号的 IPv6 (或纯 IPv4) 替换为实际值。
 # 推荐使用 install.sh 脚本进行自动化部署。
 
 services:
   etcd:
-    # 💡 核心修改：切换到官方维护的、支持多架构（包含 ARM64 和 AMD64）的镜像
+    # 💡 核心修改：使用官方多架构镜像，通吃 ARM64 / AMD64
     image: quay.io/coreos/etcd:v3.5.9
     container_name: etcd
     restart: always
     network_mode: "host"
     environment:
       - ETCD_NAME=etcd<NODE_ID>
-      # 💡 核心修改：指定官方镜像的数据存储路径
       - ETCD_DATA_DIR=/etcd-data
-      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      # 💡 核心升级：废弃 0.0.0.0，精准绑定当前节点的 IPv4 或 IPv6 地址，支持双栈
+      - ETCD_LISTEN_PEER_URLS=http://<CURRENT_IP>:2380
       - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://<CURRENT_IP>:2380
-      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://<CURRENT_IP>:2379,http://127.0.0.1:2379
       - ETCD_ADVERTISE_CLIENT_URLS=http://<CURRENT_IP>:2379
       - ETCD_INITIAL_CLUSTER_TOKEN=pg-ha-cluster
       - ETCD_INITIAL_CLUSTER=etcd1=http://<NODE1_IP>:2380,etcd2=http://<NODE2_IP>:2380,etcd3=http://<NODE3_IP>:2380
@@ -23,7 +24,6 @@ services:
       - ETCD_HEARTBEAT_INTERVAL=1000
       - ETCD_ELECTION_TIMEOUT=5000
     volumes:
-      # 💡 核心修改：修正挂载路径以匹配官方镜像
       - ./etcd-data:/etcd-data
 
   patroni:
@@ -35,9 +35,10 @@ services:
     privileged: true
     environment:
       - PATRONI_NAME=node<NODE_ID>
-      - PATRONI_RESTAPI_LISTEN=0.0.0.0:8008
+      # 💡 核心升级：使用 * 替代 0.0.0.0，实现完美的双栈监听
+      - PATRONI_RESTAPI_LISTEN=*:8008
       - PATRONI_RESTAPI_CONNECT_ADDRESS=<CURRENT_IP>:8008
-      - PATRONI_POSTGRESQL_LISTEN=0.0.0.0:5432
+      - PATRONI_POSTGRESQL_LISTEN=*:5432
       - PATRONI_POSTGRESQL_CONNECT_ADDRESS=<CURRENT_IP>:5432
       - ETCD_HOSTS=<NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
     volumes:

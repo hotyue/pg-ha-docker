@@ -3,7 +3,8 @@ namespace: /db/
 name: node<NODE_ID>
 
 restapi:
-  listen: 0.0.0.0:8008
+  # 💡 核心升级：使用 * 替代 0.0.0.0，实现双栈监听，注意这里必须加引号
+  listen: '*:8008'
   connect_address: <CURRENT_IP>:8008
 
 etcd:
@@ -31,7 +32,8 @@ bootstrap:
     - data-checksums
 
 postgresql:
-  listen: 0.0.0.0:5432
+  # 💡 核心升级：使用 * 替代 0.0.0.0，实现 PostgreSQL 服务的双栈监听
+  listen: '*:5432'
   connect_address: <CURRENT_IP>:5432
   data_dir: /var/lib/postgresql/data/patroni
   bin_dir: /usr/lib/postgresql/16/bin
@@ -44,5 +46,8 @@ postgresql:
       username: postgres
       password: pgpassword
   pg_hba:
+    # 💡 核心升级：为 IPv4 和 IPv6 分别配置复制与业务的白名单权限
     - host replication replicator 0.0.0.0/0 md5
+    - host replication replicator ::/0 md5
     - host all all 0.0.0.0/0 md5
+    - host all all ::/0 md5

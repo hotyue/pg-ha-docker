@@ -43,8 +43,25 @@ elif [ "$NODE_ID" == "2" ]; then CURRENT_IP=$NODE2_IP;
 elif [ "$NODE_ID" == "3" ]; then CURRENT_IP=$NODE3_IP; 
 else log_error "节点编号错误：必须是 1, 2 或 3！"; fi
 
-log_info "✅ 配置确认: 当前节点为 Node${NODE_ID} (${CURRENT_IP})"
-log_info "✅ 集群拓扑: Node1=${NODE1_IP}, Node2=${NODE2_IP}, Node3=${NODE3_IP}"
+# 💡 核心升级：IPv6 智能格式化函数
+# 如果输入的是 IPv6 地址（包含冒号），自动为其套上方括号 [ ]，以兼容所有带端口的 URL 解析
+format_ip() {
+    local ip="$1"
+    if [[ "$ip" == *":"* ]] && [[ "$ip" != *"["* ]]; then
+        echo "[$ip]"
+    else
+        echo "$ip"
+    fi
+}
+
+# 转换所有的 IP 变量为 URL 安全格式（支持双栈）
+CURRENT_URL_IP=$(format_ip "$CURRENT_IP")
+NODE1_URL_IP=$(format_ip "$NODE1_IP")
+NODE2_URL_IP=$(format_ip "$NODE2_IP")
+NODE3_URL_IP=$(format_ip "$NODE3_IP")
+
+log_info "✅ 配置确认: 当前节点为 Node${NODE_ID} (${CURRENT_URL_IP})"
+log_info "✅ 集群拓扑: Node1=${NODE1_URL_IP}, Node2=${NODE2_URL_IP}, Node3=${NODE3_URL_IP}"
 
 # ==========================================
 # 4. 创建统一的运行目录
@@ -72,12 +89,12 @@ download_and_render() {
         log_error "拉取文件失败: ${download_url}，请检查网络或 GitHub 仓库地址！"
     fi
 
-    # 使用 sed 将模板中的占位符替换为真实的变量
-    sed -i "s/<NODE_ID>/${NODE_ID}/g" "$local_file_path"
-    sed -i "s/<CURRENT_IP>/${CURRENT_IP}/g" "$local_file_path"
-    sed -i "s/<NODE1_IP>/${NODE1_IP}/g" "$local_file_path"
-    sed -i "s/<NODE2_IP>/${NODE2_IP}/g" "$local_file_path"
-    sed -i "s/<NODE3_IP>/${NODE3_IP}/g" "$local_file_path"
+    # 💡 核心升级：使用 | 作为 sed 的分隔符，完美避开 IPv6 地址中冒号的解析冲突
+    sed -i "s|<NODE_ID>|${NODE_ID}|g" "$local_file_path"
+    sed -i "s|<CURRENT_IP>|${CURRENT_URL_IP}|g" "$local_file_path"
+    sed -i "s|<NODE1_IP>|${NODE1_URL_IP}|g" "$local_file_path"
+    sed -i "s|<NODE2_IP>|${NODE2_URL_IP}|g" "$local_file_path"
+    sed -i "s|<NODE3_IP>|${NODE3_URL_IP}|g" "$local_file_path"
 }
 
 # 依次拉取并渲染所需的核心文件
@@ -93,7 +110,7 @@ chmod +x ${BASE_DIR}/patroni/entrypoint.sh
 # ==========================================
 # 6. 执行部署
 # ==========================================
-log_info "所有配置均已就绪，开始编译镜像并启动高可用集群..."
+log_info "所有配置均已就绪，开始编译镜像并启动双栈高可用集群..."
 cd ${BASE_DIR}
 
 if command -v docker-compose &> /dev/null; then
@@ -106,14 +123,15 @@ else
     log_error "未找到 Docker Compose 环境，请先安装 Docker！"
 fi
 
-log_info "🎉 部署任务圆满完成！容器已在后台安全运行。"
+log_info "🎉 部署任务圆满完成！双栈兼容容器已在后台安全运行。"
 echo -e "\n=============================================="
 echo -e "                 集群访问指南                   "
 echo -e "=============================================="
-echo -e "写库地址 (Primary) : ${CURRENT_IP}:5000"
-echo -e "读库地址 (Replica) : ${CURRENT_IP}:5001"
-echo -e "监控面板 (HAProxy) : http://${CURRENT_IP}:8404/stats"
+echo -e "写库地址 (Primary) : ${CURRENT_URL_IP}:5000"
+echo -e "读库地址 (Replica) : ${CURRENT_URL_IP}:5001"
+echo -e "监控面板 (HAProxy) : http://${CURRENT_URL_IP}:8404/stats"
 echo -e ""
 echo -e "查看集群内部角色分配状态，请执行："
 echo -e "👉 docker exec -it patroni patronioctl -c /etc/patroni.yml topology"
+echo -e "👉 或者使用: docker exec -it patroni python3 -m patroni.patronioctl -c /etc/patroni.yml topology"
 echo -e "==============================================\n"
