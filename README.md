@@ -22,18 +22,27 @@
 
 无需克隆本仓库，直接在目标机器上执行一行命令即可完成配置生成与容器拉起。
 
-> **语法**: `curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- <当前节点ID:1|2|3> <Node1_IP> <Node2_IP> <Node3_IP>`
+> **语法**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- <当前节点ID:1|2|3> <Node1_IP> <Node2_IP> <Node3_IP>
+```
 
 **部署演示 (假设三台服务器 IP 分别为 10.0.0.1, 10.0.0.2, 10.0.0.3)：**
 
 **在 Node 1 (10.0.0.1) 上执行：**
-`curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 1 10.0.0.1 10.0.0.2 10.0.0.3`
+```bash
+curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 1 10.0.0.1 10.0.0.2 10.0.0.3
+```
 
 **在 Node 2 (10.0.0.2) 上执行：**
-`curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 2 10.0.0.1 10.0.0.2 10.0.0.3`
+```bash
+curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 2 10.0.0.1 10.0.0.2 10.0.0.3
+```
 
 **在 Node 3 (10.0.0.3) 上执行：**
-`curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 3 10.0.0.1 10.0.0.2 10.0.0.3`
+```bash
+curl -fsSL https://raw.githubusercontent.com/<你的用户名>/pg-ha-docker/main/install.sh | sudo bash -s -- 3 10.0.0.1 10.0.0.2 10.0.0.3
+```
 
 *(⚠️ 注意：请将上述命令中的 `<你的用户名>` 替换为实际的 GitHub 账号名)*
 
@@ -57,13 +66,17 @@
 
 ### 1. 查看集群健康状态与拓扑 (最常用)
 实时查看谁是当前的 Leader 主库，谁是从库，以及数据同步的延迟情况（Lag）：
-`docker exec -it patroni curl -s http://localhost:8008/cluster | python3 -c "import sys, json; print(json.dumps(json.load(sys.stdin), indent=4))"`
+```bash
+docker exec -it patroni curl -s http://localhost:8008/cluster | python3 -c "import sys, json; print(json.dumps(json.load(sys.stdin), indent=4))"
+```
 
 ### 2. 手动主从切换 (Failover)
 当需要对当前主节点进行停机维护，或进行高可用切换演练时，可安全地手动触发选举：
-`docker exec -it patroni curl -i -XPOST http://localhost:8008/switchover \
+```bash
+docker exec -it patroni curl -i -XPOST http://localhost:8008/switchover \
   -H "Content-Type: application/json" \
-  -d '{"leader": "node2", "candidate": "node3"}'`
+  -d '{"leader": "node2", "candidate": "node3"}'
+```
   
 执行说明：
 
@@ -76,9 +89,11 @@
 
 ### 3. 强制重置损坏的从节点
 如果某个节点发生严重的物理故障导致数据时间线错乱，你可以强制该节点清空本地旧数据，并从当前 Leader 重新同步全量数据：
-`docker exec -it patroni curl -i -XPOST http://localhost:8008/reinit \
+```bash
+docker exec -it patroni curl -i -XPOST http://localhost:8008/reinit \
   -H "Content-Type: application/json" \
-  -d '{"cluster": "pg-ha-cluster", "member": "node<ID>"}'`
+  -d '{"cluster": "pg-ha-cluster", "member": "node<ID>"}'
+```
 
 🔍 参数深度解析
 - member: 这是你想要重置的节点名称（例如 node1）。
@@ -102,9 +117,13 @@
 ### 4. 查看组件日志
 排查数据库同步异常或选举失败的原因：
 * 查看 Patroni 与 PostgreSQL 核心日志:
-  `cd /opt/docker/pg-ha && docker compose logs -f patroni`
+```bash
+cd /opt/docker/pg-ha && docker compose logs -f patroni
+```
 * 查看 HAProxy 健康检查和路由日志:
-  `cd /opt/docker/pg-ha && docker compose logs -f haproxy`
+```bash
+cd /opt/docker/pg-ha && docker compose logs -f haproxy
+```
 
 ---
 
