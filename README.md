@@ -75,14 +75,14 @@ docker exec -it patroni patronictl -c /etc/patroni.yml list
 ```bash
 docker exec -it patroni patronictl -c /etc/patroni.yml switchover
 ```
-根据系统提示进行操作~
+*(⚠️ 注意：根据系统提示进行操作~)*
 
 ### 3. 强制重置损坏的从节点
 如果某个节点发生严重的物理故障导致数据时间线错乱，你可以强制该节点清空本地旧数据，并从当前 Leader 重新同步全量数据：
 ```bash
 docker exec -it patroni patronictl -c /etc/patroni.yml reinit pg-ha-cluster <节点名>
 ```
-
+*(⚠️ 注意：请将上述命令中的 `<节点名>` 替换为实际的 node1/2/3 节点名)*
 (系统会询问 "Are you sure?"，输入 y 即可)
 
 ### 4. 查看组件日志
