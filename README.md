@@ -76,6 +76,10 @@ docker exec -it patroni patronictl -c /etc/patroni.yml list
 docker exec -it patroni patronictl -c /etc/patroni.yml switchover
 ```
 *(⚠️ 注意：根据系统提示进行操作~)*
+- 1、确认当前正在运行的主节点（比如当前主节点是 node2，如果没问题，直接回车确认）
+- 2、输入准备把谁提拔成主节点（比如 node1），那直接输入 node1，然后按回车
+- 3、再次确认是否执行？ 按回车确认
+
 
 ### 3. 强制重置损坏的从节点
 如果某个节点发生严重的物理故障导致数据时间线错乱，你可以强制该节点清空本地旧数据，并从当前 Leader 重新同步全量数据：
