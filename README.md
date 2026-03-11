@@ -86,7 +86,9 @@ docker exec -it patroni patronictl -c /etc/patroni.yml switchover
 ```bash
 docker exec -it patroni patronictl -c /etc/patroni.yml reinit pg-ha-cluster <节点名>
 ```
+
 *(⚠️ 注意：请将上述命令中的 `<节点名>` 替换为实际的 node1/2/3 节点名)* 
+
 *(系统会询问 "Are you sure?"，输入 y 即可)* 
 
 ### 4. 查看组件日志
