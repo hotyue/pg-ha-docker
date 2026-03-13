@@ -1,19 +1,30 @@
+# ==============================================================================
+# 🚀 Patroni 核心配置文件 (基于环境变量动态注入模板)
+# ==============================================================================
+# 💡 架构说明：
+# 本文件作为开源模板，剥离了所有节点专属的 IP 和敏感密码信息。
+# 所有的 ${VAR} 变量均会自动读取容器内通过 `.env` 或 `docker-compose` 传入的环境变量。
+# ==============================================================================
+
 scope: pg-ha-cluster
 namespace: /db/
-name: node<NODE_ID>
+# 💡 动态注入：节点名称 (例如 node1, node2)
+name: ${PATRONI_NAME}
 
 restapi:
-  # 💡 核心修复：改回 0.0.0.0，彻底解决 Python http.server 双重绑定导致的 [Errno 98] 报错
+  # 💡 核心修复：0.0.0.0 确保 Python http.server 双重绑定时不报错 [Errno 98]
   listen: 0.0.0.0:8008
-  connect_address: <CURRENT_IP>:8008
+  # 💡 动态注入：当前节点的公网/内网 IP，供其他节点访问本机的 API
+  connect_address: ${CURRENT_IP}:8008
 
 etcd3:
-  hosts: <NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
+  # 💡 动态注入：自动组合三个节点的 IP 形成 Etcd 集群访问入口
+  hosts: ${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379
   protocol: http
 
 bootstrap:
   dcs:
-    # 针对 200ms 高延迟的集群超时时间调优
+    # 💡 性能调优：针对 200ms 高延迟的异地多活集群超时时间调优
     ttl: 60
     loop_wait: 10
     retry_timeout: 20
@@ -33,21 +44,34 @@ bootstrap:
     - data-checksums
 
 postgresql:
-  # 💡 核心修复：与 API 保持一致，使用 0.0.0.0 确保 Patroni 启动守护进程时不抛出异常
+  # 💡 监听地址：0.0.0.0 确保 Patroni 启动守护进程时不抛出异常
   listen: 0.0.0.0:5432
-  connect_address: <CURRENT_IP>:5432
+  # 💡 动态注入：告诉集群里的其他兄弟，“我的真实数据库 IP 是这个”
+  connect_address: ${CURRENT_IP}:5432
   data_dir: /var/lib/postgresql/data/patroni
   bin_dir: /usr/lib/postgresql/16/bin
   pgpass: /tmp/pgpass
+  
+  # ==========================================
+  # 🔐 安全合规：密码剥离
+  # ==========================================
   authentication:
     replication:
       username: replicator
-      password: replpassword
+      # 💡 动态注入：底层同步账号的强密码，由 .env 提供
+      password: ${PG_REPL_PASSWORD}
     superuser:
       username: postgres
-      password: pgpassword
+      # 💡 动态注入：数据库最高管理员密码，由 .env 提供
+      password: ${PG_ROOT_PASSWORD}
+      
+  # ==========================================
+  # 🛡️ 访问控制策略 (HBA)
+  # ==========================================
   pg_hba:
     # 💡 保留：底层依然同时为 IPv4 和 IPv6 开放复制与业务的白名单权限
+    # 进阶提示：如果对安全要求极高，可在生产环境将 0.0.0.0/0 改为 Docker 网段 (如 172.16.0.0/12) 
+    # 或 Tailscale 内网网段 (如 100.64.0.0/10)
     - host replication replicator 0.0.0.0/0 md5
     - host replication replicator ::/0 md5
     - host all all 0.0.0.0/0 md5

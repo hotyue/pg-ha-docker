@@ -1,26 +1,35 @@
-# 这是一个支持 IPv4/IPv6 双栈的模板文件。
-# 如果手动部署，请将 <NODE_ID> 和带有中括号的 IPv6 (或纯 IPv4) 替换为实际值。
-# 推荐使用 install.sh 脚本进行自动化部署。
+# ==============================================================================
+# 🚀 高可用 PostgreSQL 集群部署蓝图 (支持 IPv4/IPv6 双栈)
+# ==============================================================================
+# 💡 架构演进说明：
+# 本文件已实现“配置与环境分离”。请勿直接硬编码或修改本文件中的 ${VAR} 占位符。
+# 所有的变量（如 IP、密码、节点 ID）均应通过项目根目录下的 `.env` 文件注入。
+# 强烈推荐使用项目配套的 install.sh 脚本来自动生成 `.env` 并拉起本编排。
+# ==============================================================================
 
 services:
   etcd:
-    # 💡 核心修改：使用官方多架构镜像，通吃 ARM64 / AMD64
+    # 💡 核心修改：使用官方多架构镜像，通吃 ARM64 / AMD64 架构的主机
     image: quay.io/coreos/etcd:v3.5.9
     container_name: etcd
     restart: always
     network_mode: "host"
+    # 💡 变量注入源：指定从本地环境文件读取变量
+    env_file: 
+      - .env
     environment:
-      - ETCD_NAME=etcd<NODE_ID>
+      - ETCD_NAME=etcd${NODE_ID}
       - ETCD_DATA_DIR=/etcd-data
-      # 💡 核心升级：废弃 0.0.0.0，精准绑定当前节点的 IPv4 或 IPv6 地址，支持双栈
-      - ETCD_LISTEN_PEER_URLS=http://<CURRENT_IP>:2380
-      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://<CURRENT_IP>:2380
-      - ETCD_LISTEN_CLIENT_URLS=http://<CURRENT_IP>:2379,http://127.0.0.1:2379
-      - ETCD_ADVERTISE_CLIENT_URLS=http://<CURRENT_IP>:2379
+      # 💡 网络层：精准绑定当前节点的 IPv4 或 IPv6 地址，支持双栈通讯
+      - ETCD_LISTEN_PEER_URLS=http://${CURRENT_IP}:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://${CURRENT_IP}:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://${CURRENT_IP}:2379,http://127.0.0.1:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://${CURRENT_IP}:2379
+      # 💡 集群拓扑：自动解析外部传入的三节点 IP，完成组网握手
       - ETCD_INITIAL_CLUSTER_TOKEN=pg-ha-cluster
-      - ETCD_INITIAL_CLUSTER=etcd1=http://<NODE1_IP>:2380,etcd2=http://<NODE2_IP>:2380,etcd3=http://<NODE3_IP>:2380
+      - ETCD_INITIAL_CLUSTER=etcd1=http://${NODE1_IP}:2380,etcd2=http://${NODE2_IP}:2380,etcd3=http://${NODE3_IP}:2380
       - ETCD_INITIAL_CLUSTER_STATE=new
-      # 针对 200ms 高延迟的优化参数
+      # 💡 性能调优：针对异地多活（200ms 级别高延迟）的选举超时优化参数
       - ETCD_HEARTBEAT_INTERVAL=1000
       - ETCD_ELECTION_TIMEOUT=5000
     volumes:
@@ -33,16 +42,25 @@ services:
     restart: always
     network_mode: "host"
     privileged: true
+    # 💡 变量注入源：同样接入 .env，确保环境一致性
+    env_file: 
+      - .env
     environment:
-      - PATRONI_NAME=node<NODE_ID>
-      # 💡 核心升级：使用 * 替代 0.0.0.0，实现完美的双栈监听
+      - PATRONI_NAME=node${NODE_ID}
+      # 💡 核心升级：使用 * 替代 0.0.0.0，完美支持宿主机的双栈 (IPv4+IPv6) 监听
       - PATRONI_RESTAPI_LISTEN=*:8008
-      - PATRONI_RESTAPI_CONNECT_ADDRESS=<CURRENT_IP>:8008
+      - PATRONI_RESTAPI_CONNECT_ADDRESS=${CURRENT_IP}:8008
       - PATRONI_POSTGRESQL_LISTEN=*:5432
-      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=<CURRENT_IP>:5432
-      - ETCD_HOSTS=<NODE1_IP>:2379,<NODE2_IP>:2379,<NODE3_IP>:2379
+      - PATRONI_POSTGRESQL_CONNECT_ADDRESS=${CURRENT_IP}:5432
+      # 指向刚才通过变量构建的 Etcd 集群
+      - ETCD_HOSTS=${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379
+      # 💡 安全演进：将 .env 中生成的强密码安全透传给 Patroni，实现密码与代码仓库的彻底解耦
+      - PATRONI_SUPERUSER_PASSWORD=${PG_ROOT_PASSWORD}
+      - PATRONI_REPLICATION_PASSWORD=${PG_REPL_PASSWORD}
     volumes:
       - ./pg-data:/var/lib/postgresql/data
+      # 注意：patroni.yml 的映射已在 Dockerfile 中打包处理，如果需要外部挂载覆盖，可在此处取消注释
+      # - ./patroni/patroni.yml:/etc/patroni.yml
     depends_on:
       - etcd
 
@@ -51,6 +69,14 @@ services:
     container_name: haproxy
     restart: always
     network_mode: "host"
+    # 💡 变量注入源：让 HAProxy 容器环境也拥有集群的 IP 视图
+    env_file: 
+      - .env
+    environment:
+      # 将三个节点的 IP 传递进去，供 HAProxy 内部的 lua 或环境解析（为下一步 haproxy.cfg 的升级做准备）
+      - NODE1_IP=${NODE1_IP}
+      - NODE2_IP=${NODE2_IP}
+      - NODE3_IP=${NODE3_IP}
     volumes:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
