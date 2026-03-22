@@ -38,6 +38,7 @@ services:
   patroni:
     build: 
       context: ./patroni
+      network: host
     container_name: patroni
     restart: always
     network_mode: "host"
