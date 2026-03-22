@@ -12,6 +12,10 @@ services:
     # 💡 核心修改：使用官方多架构镜像，通吃 ARM64 / AMD64 架构的主机
     image: quay.io/coreos/etcd:v3.5.9
     container_name: etcd
+    # 💡 破解受限 LXC 主机的内核配额限制 (Session Keyring Bypass)
+    security_opt:
+      - seccomp:unconfined
+      - no-new-privileges:true
     restart: always
     network_mode: "host"
     # 💡 变量注入源：指定从本地环境文件读取变量
@@ -38,8 +42,13 @@ services:
   patroni:
     build: 
       context: ./patroni
+      # 💡 解决纯 IPv6 主机下 build 阶段 apt-get 无法联网的问题
       network: host
     container_name: patroni
+    # 💡 破解受限 LXC 主机的内核配额限制
+    security_opt:
+      - seccomp:unconfined
+      - no-new-privileges:true
     restart: always
     network_mode: "host"
     privileged: true
@@ -53,8 +62,12 @@ services:
       - PATRONI_RESTAPI_CONNECT_ADDRESS=${CURRENT_IP}:8008
       - PATRONI_POSTGRESQL_LISTEN=*:5432
       - PATRONI_POSTGRESQL_CONNECT_ADDRESS=${CURRENT_IP}:5432
-      # 指向刚才通过变量构建的 Etcd 集群
-      - ETCD_HOSTS=${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379
+      
+      # 💡 终极修复：
+      # 1. 变量名必须带 PATRONI_ETCD3_ 前缀，Patroni 才会识别。
+      # 2. 必须加单引号 ('...')，防止纯 IPv6 地址的 [ ] 括号被 Python 底层当做 YAML 数组解析导致启动崩溃。
+      - PATRONI_ETCD3_HOSTS='${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379'
+      
       # 💡 安全演进：将 .env 中生成的强密码安全透传给 Patroni，实现密码与代码仓库的彻底解耦
       - PATRONI_SUPERUSER_PASSWORD=${PG_ROOT_PASSWORD}
       - PATRONI_REPLICATION_PASSWORD=${PG_REPL_PASSWORD}
@@ -68,6 +81,12 @@ services:
   haproxy:
     image: haproxy:2.8-alpine
     container_name: haproxy
+    # 💡 破解受限 LXC 主机的内核配额限制
+    security_opt:
+      - seccomp:unconfined
+      - no-new-privileges:true
+    # 💡 强制降权至 ping/haproxy 用户组，绕过部分 LXC 极品主机对 root 用户最大文件描述符 (FD) 的变态限制
+    user: "99:99"
     restart: always
     network_mode: "host"
     # 💡 变量注入源：让 HAProxy 容器环境也拥有集群的 IP 视图
