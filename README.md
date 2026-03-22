@@ -101,12 +101,3 @@ cd /opt/docker/pg-ha && docker compose logs -f patroni
 ```bash
 cd /opt/docker/pg-ha && docker compose logs -f haproxy
 ```
-
----
-
-## ⚠️ 生产环境安全建议
-
-本项目的模板文件默认使用了弱密码（如 `pgpassword`, `replpassword`）作为示例。在投入真正的生产环境前，**强烈建议**你：
-1. Fork 本仓库。
-2. 修改 `patroni/patroni.yml` 模板中的 `superuser` 和 `replication` 密码。
-3. 将 `install.sh` 中的 `GITHUB_USER` 变量指向你的仓库。
