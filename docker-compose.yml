@@ -1,10 +1,10 @@
 # ==============================================================================
-# 🚀 高可用 PostgreSQL 集群部署蓝图 (支持 IPv4/IPv6 双栈)
+# 🚀 高可用 PostgreSQL 集群部署蓝图 (支持 IPv4/IPv6 双栈与自适应网络调优)
 # ==============================================================================
 # 💡 架构演进说明：
 # 本文件已实现“配置与环境分离”。请勿直接硬编码或修改本文件中的 ${VAR} 占位符。
-# 所有的变量（如 IP、密码、节点 ID）均应通过项目根目录下的 `.env` 文件注入。
-# 强烈推荐使用项目配套的 install.sh 脚本来自动生成 `.env` 并拉起本编排。
+# 所有的变量（如 IP、密码、节点 ID、动态超时参数）均应通过项目根目录下的 `.env` 文件注入。
+# 强烈推荐使用项目配套的 install.sh 脚本来自动探测物理网络延迟，生成 `.env` 并拉起本编排。
 # ==============================================================================
 
 # 🛡️ 磁盘免疫策略：定义全局标准的容器日志轮转规则 (YAML 锚点)
@@ -45,9 +45,11 @@ services:
       - ETCD_INITIAL_CLUSTER_TOKEN=pg-ha-cluster
       - ETCD_INITIAL_CLUSTER=etcd1=http://${NODE1_IP}:2380,etcd2=http://${NODE2_IP}:2380,etcd3=http://${NODE3_IP}:2380
       - ETCD_INITIAL_CLUSTER_STATE=new
-      # 💡 性能调优：针对异地多活（200ms 级别高延迟）的选举超时优化参数
+      # 💡 性能与延迟自适应调优：
+      # 心跳间隔固定 1000ms；选举超时由 install.sh 探测出的网络环境动态决定。
+      # 使用 ${VAR:-5000} 语法提供绝对的安全兜底（万一变量缺失，默认退回 5000ms）。
       - ETCD_HEARTBEAT_INTERVAL=1000
-      - ETCD_ELECTION_TIMEOUT=5000
+      - ETCD_ELECTION_TIMEOUT=${ETCD_ELECTION_TIMEOUT:-5000}
     volumes:
       - ./etcd-data:/etcd-data
 
@@ -77,6 +79,11 @@ services:
       - PATRONI_POSTGRESQL_LISTEN=*:5432
       - PATRONI_POSTGRESQL_CONNECT_ADDRESS=${CURRENT_IP}:5432
       
+      # 💡 跨国高延迟网络自适应调优：动态注入 Leader 租约与重试超时，防止网络抖动导致的脑裂与误切。
+      - PATRONI_TTL=${PATRONI_TTL:-30}
+      - PATRONI_LOOP_WAIT=${PATRONI_LOOP_WAIT:-10}
+      - PATRONI_RETRY_TIMEOUT=${PATRONI_RETRY_TIMEOUT:-10}
+      
       # 💡 终极修复：
       # 1. 变量名必须带 PATRONI_ETCD3_ 前缀，Patroni 才会识别。
       # 2. 必须加单引号 ('...')，防止纯 IPv6 地址的 [ ] 括号被 Python 底层当做 YAML 数组解析导致启动崩溃。
@@ -105,14 +112,16 @@ services:
     network_mode: "host"
     # 🛡️ 挂载全局日志护盾
     logging: *default-logging
-    # 💡 变量注入源：让 HAProxy 容器环境也拥有集群的 IP 视图
+    # 💡 变量注入源：让 HAProxy 容器环境也拥有集群的 IP 视图和动态参数
     env_file: 
       - .env
     environment:
-      # 将三个节点的 IP 传递进去，供 HAProxy 内部的 lua 或环境解析（为下一步 haproxy.cfg 的升级做准备）
+      # 将三个节点的 IP 传递进去，供 HAProxy 内部的 lua 或环境解析
       - NODE1_IP=${NODE1_IP}
       - NODE2_IP=${NODE2_IP}
       - NODE3_IP=${NODE3_IP}
+      # 💡 将动态计算的健康检查间隔时间传入容器，供 haproxy.cfg 读取
+      - HA_INTER_TIME=${HA_INTER_TIME:-2000}
     volumes:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
