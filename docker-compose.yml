@@ -7,6 +7,16 @@
 # 强烈推荐使用项目配套的 install.sh 脚本来自动生成 `.env` 并拉起本编排。
 # ==============================================================================
 
+# 🛡️ 磁盘免疫策略：定义全局标准的容器日志轮转规则 (YAML 锚点)
+# 解决痛点：彻底根治 HAProxy 高频健康检查 (TCP Reset) 导致的 Patroni 连接重置报错狂刷，
+# 防止无意义的底层 Python 异常日志在数天内撑爆小容量 VPS 磁盘。
+# 策略边界：每个容器最多保留 3 个历史文件，单文件上限 50MB (即单容器总日志封顶 150MB)。
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   etcd:
     # 💡 核心修改：使用官方多架构镜像，通吃 ARM64 / AMD64 架构的主机
@@ -18,6 +28,8 @@ services:
       - no-new-privileges:true
     restart: always
     network_mode: "host"
+    # 🛡️ 挂载全局日志护盾
+    logging: *default-logging
     # 💡 变量注入源：指定从本地环境文件读取变量
     env_file: 
       - .env
@@ -52,6 +64,8 @@ services:
     restart: always
     network_mode: "host"
     privileged: true
+    # 🛡️ 挂载全局日志护盾
+    logging: *default-logging
     # 💡 变量注入源：同样接入 .env，确保环境一致性
     env_file: 
       - .env
@@ -89,6 +103,8 @@ services:
     user: "99:99"
     restart: always
     network_mode: "host"
+    # 🛡️ 挂载全局日志护盾
+    logging: *default-logging
     # 💡 变量注入源：让 HAProxy 容器环境也拥有集群的 IP 视图
     env_file: 
       - .env
