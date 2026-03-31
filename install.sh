@@ -4,13 +4,14 @@
 # ==============================================================================
 # 架构特性：环境变量驱动 (Environment-Driven) + 双栈网络兼容 (IPv4/IPv6)
 # 核心升级：跨国网络自适应调优 (Auto-Tuning) + 集群配置防脑裂强一致性对齐
+# 修复记录：解决 HAProxy 配置文件中 ${HA_INTER_TIME} 导致的 $ 字符解析错误
 # ==============================================================================
 
 # 遇到错误立即退出
 set -e
 
 # ==========================================
-# 1. 核心仓库配置 (⚠️ 请修改为你的真实信息)
+# 1. 核心仓库配置 (⚠️ 已对齐至 Forgejo 实例)
 # ==========================================
 FORGEJO_DOMAIN="git.94211762.xyz"
 USER_NAME="hotyue"
@@ -192,6 +193,11 @@ download_file "patroni/Dockerfile"
 download_file "patroni/entrypoint.sh"
 download_file "patroni/patroni.yml"
 download_file "haproxy/haproxy.cfg"
+
+# 💡 关键修正：动态渲染 HAProxy 配置文件
+# 从根源解决 HAProxy 无法解析配置文件中 $ 变量占位符的问题
+log_info "正在执行配置预渲染 (Rendering HAProxy Config)..."
+sed -i "s/\${HA_INTER_TIME}/${HA_INTER_TIME}/g" ${BASE_DIR}/haproxy/haproxy.cfg
 
 echo "" >> ${BASE_DIR}/haproxy/haproxy.cfg
 chmod +x ${BASE_DIR}/patroni/entrypoint.sh
