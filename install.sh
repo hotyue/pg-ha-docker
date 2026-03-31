@@ -12,10 +12,12 @@ set -e
 # ==========================================
 # 1. 核心仓库配置 (⚠️ 请修改为你的真实信息)
 # ==========================================
-GITHUB_USER="hotyue"
-GITHUB_REPO="pg-ha-docker"
-GITHUB_BRANCH="main"
-RAW_BASE_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}"
+FORGEJO_DOMAIN="git.94211762.xyz"
+USER_NAME="hotyue"
+REPO_NAME="pg-ha-docker"
+BRANCH_NAME="main"
+# 注意：Forgejo 的 Raw 路径必须包含 /raw/branch/
+RAW_BASE_URL="https://${FORGEJO_DOMAIN}/${USER_NAME}/${REPO_NAME}/raw/branch/${BRANCH_NAME}"
 
 # ==========================================
 # 2. 定义漂亮的日志与工具函数
@@ -172,7 +174,7 @@ EOF
 chmod 600 ${BASE_DIR}/.env # 保护包含密码的文件
 
 # ==========================================
-# 6. 从 GitHub 动态拉取原汁原味的模板文件
+# 6. 从 Forgejo 实例动态拉取模板文件
 # ==========================================
 download_file() {
     local remote_file_path=$1
@@ -181,7 +183,7 @@ download_file() {
 
     log_info "正在拉取: ${remote_file_path} ..."
     if ! curl -fsSL "$download_url" -o "$local_file_path"; then
-        log_error "拉取失败: ${download_url}，请检查网络或 GitHub 仓库地址！"
+        log_error "拉取失败: ${download_url}，请检查网络或 Forgejo 仓库地址！"
     fi
 }
 
