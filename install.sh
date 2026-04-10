@@ -11,14 +11,12 @@
 set -e
 
 # ==========================================
-# 1. 核心仓库配置 (⚠️ 已对齐至 Forgejo 实例)
+# 1. 核心仓库配置 (⚠️ 已恢复至官方 GitHub)
 # ==========================================
-FORGEJO_DOMAIN="git.94211762.xyz"
-USER_NAME="hotyue"
-REPO_NAME="pg-ha-docker"
-BRANCH_NAME="main"
-# 注意：Forgejo 的 Raw 路径必须包含 /raw/branch/
-RAW_BASE_URL="https://${FORGEJO_DOMAIN}/${USER_NAME}/${REPO_NAME}/raw/branch/${BRANCH_NAME}"
+GITHUB_USER="hotyue"
+GITHUB_REPO="pg-ha-docker"
+GITHUB_BRANCH="main"
+RAW_BASE_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}"
 
 # ==========================================
 # 2. 定义漂亮的日志与工具函数
@@ -102,6 +100,15 @@ else
     PG_REPL_PASSWORD=$input_repl_pw
 fi
 
+# 💡 新增：HAProxy 监控面板密码配置
+read -p "请输入监控面板(HAProxy)的 admin 密码 [直接回车自动生成]: " input_stats_pw </dev/tty
+if [ -z "$input_stats_pw" ]; then
+    HAPROXY_STATS_PASSWORD=$(openssl rand -base64 8 | tr -dc 'a-zA-Z0-9' | head -c 12)
+    log_warn "已自动生成 HAProxy 面板密码，部署其它节点时请使用此密码！"
+else
+    HAPROXY_STATS_PASSWORD=$input_stats_pw
+fi
+
 # 💡 核心升级：集群网络预检与自适应调优 (防脑裂一致性控制)
 if [ "$NODE_ID" == "1" ]; then
     log_info "正在对 Node 2 和 Node 3 进行物理网络延迟探测..."
@@ -163,6 +170,7 @@ NODE3_IP=${NODE3_URL_IP}
 # 数据库密码凭证
 PG_ROOT_PASSWORD=${PG_ROOT_PASSWORD}
 PG_REPL_PASSWORD=${PG_REPL_PASSWORD}
+HAPROXY_STATS_PASSWORD=${HAPROXY_STATS_PASSWORD}
 
 # 分布式集群防脑裂网络共识参数
 ETCD_ELECTION_TIMEOUT=${ETCD_ELECTION_TIMEOUT}
@@ -175,7 +183,7 @@ EOF
 chmod 600 ${BASE_DIR}/.env # 保护包含密码的文件
 
 # ==========================================
-# 6. 从 Forgejo 实例动态拉取模板文件
+# 6. 从 GitHub 实例动态拉取模板文件
 # ==========================================
 download_file() {
     local remote_file_path=$1
@@ -184,7 +192,7 @@ download_file() {
 
     log_info "正在拉取: ${remote_file_path} ..."
     if ! curl -fsSL "$download_url" -o "$local_file_path"; then
-        log_error "拉取失败: ${download_url}，请检查网络或 Forgejo 仓库地址！"
+        log_error "拉取失败: ${download_url}，请检查网络或 GitHub 仓库地址！"
     fi
 }
 
@@ -198,6 +206,9 @@ download_file "haproxy/haproxy.cfg"
 # 从根源解决 HAProxy 无法解析配置文件中 $ 变量占位符的问题
 log_info "正在执行配置预渲染 (Rendering HAProxy Config)..."
 sed -i "s/\${HA_INTER_TIME}/${HA_INTER_TIME}/g" ${BASE_DIR}/haproxy/haproxy.cfg
+# 💡 激活面板密码认证机制 (清除旧配置并追加新密码)
+sed -i "s|.*stats auth admin:.*||g" ${BASE_DIR}/haproxy/haproxy.cfg
+echo "    stats auth admin:${HAPROXY_STATS_PASSWORD}" >> ${BASE_DIR}/haproxy/haproxy.cfg
 
 echo "" >> ${BASE_DIR}/haproxy/haproxy.cfg
 chmod +x ${BASE_DIR}/patroni/entrypoint.sh
@@ -233,6 +244,7 @@ if [ "$NODE_ID" == "1" ]; then
     echo -e "------------------------------------------------------------------------------"
     echo -e "\033[33mPG_ROOT_PASSWORD\033[0m      : \033[1;32m${PG_ROOT_PASSWORD}\033[0m"
     echo -e "\033[33mPG_REPL_PASSWORD\033[0m      : \033[1;32m${PG_REPL_PASSWORD}\033[0m"
+    echo -e "\033[33mHAPROXY_STATS_PASSWORD\033[0m : \033[1;32m${HAPROXY_STATS_PASSWORD}\033[0m"
     echo -e "\033[33mETCD_ELECTION_TIMEOUT\033[0m : \033[1;32m${ETCD_ELECTION_TIMEOUT}\033[0m"
     echo -e "\033[33mPATRONI_TTL\033[0m           : \033[1;32m${PATRONI_TTL}\033[0m"
     echo -e "\033[33mPATRONI_LOOP_WAIT\033[0m     : \033[1;32m${PATRONI_LOOP_WAIT}\033[0m"
@@ -247,4 +259,5 @@ echo -e "=============================================="
 echo -e "写库地址 (Primary) : ${CURRENT_URL_IP}:5000"
 echo -e "读库地址 (Replica) : ${CURRENT_URL_IP}:5001"
 echo -e "监控面板 (HAProxy) : http://${CURRENT_URL_IP}:8404/stats"
+echo -e "面板登录账号密码   : \033[33madmin\033[0m / \033[33m${HAPROXY_STATS_PASSWORD}\033[0m"
 echo -e "==============================================\n"
