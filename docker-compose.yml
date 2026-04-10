@@ -84,10 +84,12 @@ services:
       - PATRONI_LOOP_WAIT=${PATRONI_LOOP_WAIT:-10}
       - PATRONI_RETRY_TIMEOUT=${PATRONI_RETRY_TIMEOUT:-10}
       
-      # 💡 终极修复：
-      # 1. 变量名必须带 PATRONI_ETCD3_ 前缀，Patroni 才会识别。
-      # 2. 必须加单引号 ('...')，防止纯 IPv6 地址的 [ ] 括号被 Python 底层当做 YAML 数组解析导致启动崩溃。
-      - PATRONI_ETCD3_HOSTS='${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379'
+      # 💡 史诗级底层 Bug 终极修复 (Patroni 解析灾难)：
+      # 1. 变量名必须使用复数 HOSTS (而非 HOST)，激活 Patroni 的多节点切割逻辑。
+      # 2. 必须强制使用标准 JSON 数组 ["...","..."] 格式传递！
+      # 避坑原理：如果用传统逗号拼接字符串，Patroni 底层的 Python URL 探测器会因为检测到多个端口冒号 (:)，
+      # 极其愚蠢地将整个字符串误判为“单个超长 IPv6 地址”，从而在纯 IPv4 环境下触发 ValueError 导致容器无限崩溃。
+      - PATRONI_ETCD3_HOSTS=["${NODE1_IP}:2379","${NODE2_IP}:2379","${NODE3_IP}:2379"]
       
       # 💡 安全演进：将 .env 中生成的强密码安全透传给 Patroni，实现密码与代码仓库的彻底解耦
       - PATRONI_SUPERUSER_PASSWORD=${PG_ROOT_PASSWORD}
